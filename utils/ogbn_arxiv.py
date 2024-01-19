@@ -6,6 +6,7 @@ import torch
 import pandas as pd
 import numpy as np
 from torch_geometric.data import InMemoryDataset, download_url
+import random
 
 from utils.encoder import SentenceEncoder
 
@@ -91,7 +92,7 @@ def get_label_feature(data_root):
 
 
 class ArxivPyGDataset(InMemoryDataset):
-    def __init__(self, dataRoot="data", custom_dataRoot="custom_data", sentence_encoder=None, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, dataRoot="../data", custom_dataRoot="../custom_data", sentence_encoder=None, transform=None, pre_transform=None, pre_filter=None):
         self.data_root = dataRoot
         self.custom_data_root = custom_dataRoot
         self.sentence_encoder = sentence_encoder
@@ -137,7 +138,10 @@ class ArxivPyGDataset(InMemoryDataset):
         return [node_texts, label_texts, edge_texts, prompt_texts, prompt_edge_texts]
 
     def process(self):
-        arxiv_data_list = PygNodePropPredDataset(name="ogbn-arxiv", root=self.data_root)._data
+        arxiv_data = PygNodePropPredDataset(name="ogbn-arxiv", root=self.data_root)
+        arxiv_data_list = arxiv_data._data
+
+        arxiv_data_list.y = arxiv_data_list.y.squeeze()  # to flatten the y tensor
 
         texts = self.generate_custom_data()
         texts_embed = self.encode_texts(texts)
@@ -150,9 +154,19 @@ class ArxivPyGDataset(InMemoryDataset):
         arxiv_data_list.prompt_text_feat = texts_embed[3] # prompt node text feature
         arxiv_data_list.prompt_edge_feat = texts_embed[4] # prompt edge text feature
 
+        # get dataset split
+        split_idx = arxiv_data.get_idx_split()
+        train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
+        # Generate 10 different permutations of train/valid/test split
+        train_idx_list = [train_idx[torch.randperm(train_idx.shape[0])] for _ in range(10)]
+        valid_idx_list = [valid_idx[torch.randperm(valid_idx.shape[0])] for _ in range(10)]
+        test_idx_list = [test_idx[torch.randperm(test_idx.shape[0])] for _ in range(10)]
+
+        arxiv_data_list.train_masks = train_idx_list
+        arxiv_data_list.val_masks = valid_idx_list
+        arxiv_data_list.test_masks = test_idx_list
+
         data, slices = self.collate([arxiv_data_list]) # Pass the data_list as a list
 
         torch.save((data, slices), self.processed_paths[0])
         print("Arxiv is processed. Saved.")
-
-

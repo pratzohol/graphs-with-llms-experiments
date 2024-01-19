@@ -104,6 +104,3 @@ class PubmedPyGDataset(InMemoryDataset):
         torch.save((data, slices), self.processed_paths[0])
         print("Pubmed is processed. Saved.")
 
-
-
-

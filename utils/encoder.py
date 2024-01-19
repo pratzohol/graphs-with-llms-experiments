@@ -17,7 +17,7 @@ class SentenceEncoder:
 
         if self.name == "ST":
             self.model = SentenceTransformer(
-                osp.join(self.root, "sentence-transformers_multi-qa-distilbert-cos-v1"),
+                "sentence-transformers/multi-qa-distilbert-cos-v1",
                 device=self.device,
                 cache_folder=root
             )
@@ -29,12 +29,12 @@ class SentenceEncoder:
 
         elif self.name == "roberta":
             self.model = SentenceTransformer(
-                osp.join(self.root, "sentence-transformers_roberta-base-nli-stsb-mean-tokens"),
+                "sentence-transformers/roberta-base-nli-stsb-mean-tokens",
                 device=self.device,
                 cache_folder=root
             )
         else:
-            raise ValueError(f"Unknown language model: {name}.")
+            raise ValueError(f"Unknown language model: {self.name}.")
 
     def encode(self, texts):
         if self.multi_gpu:
