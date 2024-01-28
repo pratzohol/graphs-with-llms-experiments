@@ -271,3 +271,12 @@ state_dicts/ogbn_arxiv_roberta/gat/Mask_0_best_state_dict.pt
 state_dicts/ogbn_arxiv_roberta/gcn/Mask_0_best_state_dict.pt
 state_dicts/ogbn_arxiv_roberta/mlp/Mask_0_best_state_dict.pt
 state_dicts/ogbn_arxiv_roberta/sage/Mask_0_best_state_dict.pt
+custom_data/ogbn_products_ST/processed/data.pt
+custom_data/ogbn_products_ST/processed/pre_filter.pt
+custom_data/ogbn_products_ST/processed/pre_transform.pt
+custom_data/ogbn_products_ST/processed/texts.pkl
+custom_data/ogbn_products_roberta/processed/data.pt
+custom_data/ogbn_products_roberta/processed/pre_filter.pt
+custom_data/ogbn_products_roberta/processed/pre_transform.pt
+custom_data/ogbn_products_roberta/processed/texts.pkl
+utils/__pycache__/ogbn_products.cpython-310.pyc

@@ -1,48 +1,98 @@
 import pandas as pd
 import numpy as np
 import torch
+from torch_geometric.loader import DataLoader
 from models.gnn import GNN
 from models.mlp import MLP
 from utils.dataloader import GetDataloader
-from tqdm import trange
-from tqdm import tqdm
+from tqdm import trange, trange
 import torch.nn as nn
 import torch.nn.functional as F
 import os
 import os.path as osp
+import wandb
+import time
 
 
 class Trainer:
-    def __init__(self, dataset_name="cora", sentence_encoder="ST", model_type="mlp", device=0, state_dict_path="./state_dicts"):
-        self.dataset_name = dataset_name
-        self.sentence_encoder = sentence_encoder
-        self.model_type = model_type.lower()
-        self.device = torch.device("cpu" if device==123 else f"cuda:{device}")
+    def __init__(self, params):
+        wandb.init(project="graphs-with-llms-experiments", name=params["exp name"])
+        wandb.run.summary["wandb_url"] = wandb.run.url
 
-        self.state_dict_path = osp.join(state_dict_path, f"{self.dataset_name}_{self.sentence_encoder}", f"{model_type}")
+        self.params = params
+
+        self.dataRoot = params["dataRoot"]
+        self.custom_dataRoot = params["custom_dataRoot"]
+
+        self.dataset_name = params["dataset"]
+        self.sentence_encoder = params["sentence_encoder"]
+        self.model_type = params["model_type"].lower()
+        self.device = params["device"]
+        self.epochs = params["epochs"]
+
+        self.state_dict_path = osp.join(params["state_dict_path"], f"{self.dataset_name}_{self.sentence_encoder}", f"{self.model_type}")
         if not osp.exists(self.state_dict_path):
             os.makedirs(self.state_dict_path)
 
-        dataloader = GetDataloader(dataset_name=self.dataset_name, sentence_encoder=self.sentence_encoder, device=self.device)
+        dataloader = GetDataloader(self.params)
         self.data = dataloader.get_data()
         self.num_classes = len(self.data.y.squeeze().unique())
 
         if self.model_type == "mlp":
-            self.model = MLP(num_classes=self.num_classes)
+            self.model = MLP(num_classes=self.num_classes, dropout=params["dropout"])
         elif self.model_type in ["gcn", "gat", "sage", "graphsage"]:
-            self.model = GNN(name=self.model_type, num_classes=self.num_classes)
+            self.model = GNN(name=self.model_type, num_classes=self.num_classes, dropout=params["dropout"])
         else:
             raise NotImplementedError
 
         self.data = self.data.to(device=self.device)
         self.model = self.model.to(device=self.device)
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=0.001, weight_decay=1e-4)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
+
+        # total number of model parameters
+        model_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+        num_params = int(sum([np.prod(p.size()) for p in model_parameters]))
+        print("Number of trainable parameters of the model:", num_params)
+        wandb.run.summary["num_params"] = num_params
+
+        wandb.config.params = params
+        wandb.watch(self.model, log_freq=100)
+
 
     def train(self, mask_idx):
+        t_load = 0
+        t_step = 0
         best_val_acc = 0
 
+        tbar = trange(1, self.epochs)
+
+        self.model.eval()
+        with torch.inference_mode():
+            out = self.model(self.data)
+            pred = out.argmax(dim=1)
+
+            ypred = pred[self.data.test_masks[mask_idx]]
+            ytrue = self.data.y[self.data.test_masks[mask_idx]]
+            test_correct = (ypred == ytrue).sum()
+
+            test_acc = int(test_correct) / ytrue.shape[0]
+            test_loss = float(F.cross_entropy(out[self.data.test_masks[mask_idx]], ytrue))
+
+            wandb.log({"test_acc": test_acc, "test_loss": test_loss})
+
+        if self.params["eval_only"]:
+            print("Evaluation only - skipping training - exiting now")
+            print("Note: also skipping evaluation of val set")
+            return test_acc, test_loss
+
         # total of 10 training masks are present for each dataset
-        for e in range(1, 201):
+        for e in tbar:
+            #####################################################
+            t1 = time.time()
+
+
+            #####################################################
+            t2 = time.time()
             self.model.train()
             self.optimizer.zero_grad()
 
@@ -57,7 +107,22 @@ class Trainer:
             train_acc = int(train_correct) / train_ytrue.shape[0]
             train_loss = F.cross_entropy(out[self.data.train_masks[mask_idx]], train_ytrue)
 
-            if e % 10 == 0:
+            train_loss.backward()
+            self.optimizer.step()
+            t3 = time.time()
+            #####################################################
+
+            wandb.log({"step_time": t3 - t2}, step=e)
+            wandb.log({"load_time": t2 - t1}, step=e)
+            wandb.log({"train_acc": train_acc, "train_loss": train_loss}, step=e)
+
+            t_load += t2 - t1
+            t_step += t3 - t2
+
+            tbar.set_description(f"load: {t_load / e}, step: {t_step / e}") # avg time to load and process a single batch respectively.
+
+
+            if e % 1000 == 0:
                 val_ypred = train_pred[self.data.val_masks[mask_idx]]
                 val_ytrue = self.data.y[self.data.val_masks[mask_idx]]
                 val_correct = (val_ypred == val_ytrue).sum()
@@ -65,8 +130,7 @@ class Trainer:
                 val_acc = int(val_correct) / val_ytrue.shape[0]
                 val_loss = F.cross_entropy(out[self.data.val_masks[mask_idx]], val_ytrue)
 
-                print(f"Epoch {e} => Train Accuracy : {train_acc} | Train Loss : {train_loss}")
-                print(f"Validation Accuracy : {val_acc} | Validation Loss : {val_loss}")
+                wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
@@ -81,21 +145,5 @@ class Trainer:
                                     "val_loss" : val_loss}
 
                     torch.save(model_info, save_path)
-
-            train_loss.backward()
-            self.optimizer.step()
-
-
-        self.model.eval()
-        with torch.inference_mode():
-            out = self.model(self.data)
-            pred = out.argmax(dim=1)
-
-            ypred = pred[self.data.test_masks[mask_idx]]
-            ytrue = self.data.y[self.data.test_masks[mask_idx]]
-            test_correct = (ypred == ytrue).sum()
-
-            test_acc = int(test_correct) / ytrue.shape[0]
-            test_loss = float(F.cross_entropy(out[self.data.test_masks[mask_idx]], ytrue))
 
         return test_acc, test_loss

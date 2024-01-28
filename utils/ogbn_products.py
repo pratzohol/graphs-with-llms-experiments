@@ -10,7 +10,7 @@ from torch_geometric.utils import remove_self_loops
 import random
 from datasets import load_dataset
 
-from encoder import SentenceEncoder
+from utils.encoder import SentenceEncoder
 
 
 def get_node_feature(data_root):

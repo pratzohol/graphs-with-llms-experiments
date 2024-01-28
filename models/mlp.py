@@ -5,10 +5,10 @@ import torch.nn.functional as F
 
 
 class MLP(nn.Module):
-    def __init__(self, num_classes=7):
+    def __init__(self, num_classes=7, dropout=0.3):
         super().__init__()
 
-        self.dropout = nn.Dropout(p=0.3)
+        self.dropout = nn.Dropout(p=dropout)
         self.num_classes = num_classes
 
         self.hid1 = nn.Linear(768, 128)
