@@ -23,8 +23,13 @@ def get_params():
     args.add_argument("--dropout", default=0.3, type=float)
     args.add_argument("--seed", default=None, type=int)
 
+    # Few-shot params
+    args.add_argument("--n_way", default=3, type=int) # number of classes in a task
+    args.add_argument("--n_shot", default=3, type=int) # number of samples per class in a task_constructor
+    args.add_argument("--n_query", default=2, type=int) # number of queries per class in a task
 
-    args.add_argument("--workers", default=10, type=int) # Number of workers per dataloader
+
+    args.add_argument("--num_workers", default=10, type=int) # Number of workers per dataloader
     args.add_argument("--device", default=123, type=int) # device 123 means CPU
 
     args.add_argument("--eval_only", default=False, type=bool) # If True, only evaluates the model

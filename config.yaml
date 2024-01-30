@@ -17,6 +17,10 @@ batch_size: 5
 weight_decay: 0.001
 dropout: 0.3
 seed: null
-workers: 10
+num_workers: 10
 device: 0
 eval_only: False
+
+n_way: 3
+n_shot: 3
+n_query: 2

@@ -23,5 +23,5 @@ class BatchSampler(Sampler):
     def sample(self):
         batch = []
         for _ in range(self.batch_size):
-            batch.append(self.task.sample(**self.params))
+            batch.append(self.task.sample(self.params))
         return batch

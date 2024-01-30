@@ -31,7 +31,7 @@ class TaskConstructor:
 
 
     def sample(self, params):
-        rng = rng
+        rng = params["rng"]
         sampled_labels = rng.sample(self.unique_labels_set, params["n_way"])
 
         task = {}

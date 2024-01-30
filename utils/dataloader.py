@@ -52,7 +52,6 @@ class GetDataloader:
             "batch_count": kwargs["batch_count"],
             "batch_size": kwargs["batch_size"],
             "seed": kwargs["seed"],
-            # TODO: Add below params to arg.py and config.yaml
             "n_way": kwargs["n_way"],
             "n_shot": kwargs["n_shot"],
             "n_query": kwargs["n_query"],
