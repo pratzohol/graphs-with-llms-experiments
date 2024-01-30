@@ -13,7 +13,6 @@ def get_params():
     args.add_argument("--model_type", default="MLP", type=str) # type of model to be used, e.g., mlp, gcn, gat, sage
 
     args.add_argument("--state_dict_path", default="./state_dicts", type=str) # path to store state_dicts of trained models
-    args.add_argument("--log_dir", default="log", type=str)
 
     # Training-specific params
     args.add_argument("--lr", default=0.001, type=float)

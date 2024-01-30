@@ -98,6 +98,15 @@ class PubmedPyGDataset(InMemoryDataset):
         pubmed_data_list.prompt_edge_feat = texts_embed[5]
         pubmed_data_list.edge_label_feat = texts_embed[6]
 
+        # Initially 'pubmed.pt' has 10 different masks. We use only the first one.
+        pubmed_data_list.train_mask = pubmed_data_list.train_masks[0]
+        pubmed_data_list.val_mask = pubmed_data_list.val_masks[0]
+        pubmed_data_list.test_mask = pubmed_data_list.test_masks[0]
+
+        pubmed_data_list.train_masks = None
+        pubmed_data_list.val_masks = None
+        pubmed_data_list.test_masks = None
+
         # Pass the data_list as a list
         data, slices = self.collate([pubmed_data_list])
 

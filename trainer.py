@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import torch
-from torch_geometric.loader import DataLoader
 from models.gnn import GNN
 from models.mlp import MLP
 from utils.dataloader import GetDataloader
@@ -34,7 +33,7 @@ class Trainer:
         if not osp.exists(self.state_dict_path):
             os.makedirs(self.state_dict_path)
 
-        dataloader = GetDataloader(self.params)
+        dataloader = GetDataloader(**self.params)
         self.data = dataloader.get_data()
         self.num_classes = len(self.data.y.squeeze().unique())
 
@@ -59,7 +58,7 @@ class Trainer:
         wandb.watch(self.model, log_freq=100)
 
 
-    def train(self, mask_idx):
+    def train(self):
         t_load = 0
         t_step = 0
         best_val_acc = 0
@@ -71,12 +70,12 @@ class Trainer:
             out = self.model(self.data)
             pred = out.argmax(dim=1)
 
-            ypred = pred[self.data.test_masks[mask_idx]]
-            ytrue = self.data.y[self.data.test_masks[mask_idx]]
+            ypred = pred[self.data.test_mask]
+            ytrue = self.data.y[self.data.test_mask]
             test_correct = (ypred == ytrue).sum()
 
             test_acc = int(test_correct) / ytrue.shape[0]
-            test_loss = float(F.cross_entropy(out[self.data.test_masks[mask_idx]], ytrue))
+            test_loss = float(F.cross_entropy(out[self.data.test_mask], ytrue))
 
             wandb.log({"test_acc": test_acc, "test_loss": test_loss})
 
@@ -99,13 +98,13 @@ class Trainer:
             out = self.model(self.data)
             train_pred = out.argmax(dim=1)
 
-            train_ypred = train_pred[self.data.train_masks[mask_idx]]
-            train_ytrue = self.data.y[self.data.train_masks[mask_idx]]
+            train_ypred = train_pred[self.data.train_mask]
+            train_ytrue = self.data.y[self.data.train_mask]
 
             train_correct = (train_ypred == train_ytrue).sum()
 
             train_acc = int(train_correct) / train_ytrue.shape[0]
-            train_loss = F.cross_entropy(out[self.data.train_masks[mask_idx]], train_ytrue)
+            train_loss = F.cross_entropy(out[self.data.train_mask], train_ytrue)
 
             train_loss.backward()
             self.optimizer.step()
@@ -123,19 +122,19 @@ class Trainer:
 
 
             if e % 1000 == 0:
-                val_ypred = train_pred[self.data.val_masks[mask_idx]]
-                val_ytrue = self.data.y[self.data.val_masks[mask_idx]]
+                val_ypred = train_pred[self.data.val_mask]
+                val_ytrue = self.data.y[self.data.val_mask]
                 val_correct = (val_ypred == val_ytrue).sum()
 
                 val_acc = int(val_correct) / val_ytrue.shape[0]
-                val_loss = F.cross_entropy(out[self.data.val_masks[mask_idx]], val_ytrue)
+                val_loss = F.cross_entropy(out[self.data.val_mask], val_ytrue)
 
                 wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
 
-                    save_path = osp.join(self.state_dict_path, f"Mask_{mask_idx}_best_state_dict.pt")
+                    save_path = osp.join(self.state_dict_path, f"best_state_dict.pt")
                     if osp.exists(save_path):
                         os.remove(save_path)
 

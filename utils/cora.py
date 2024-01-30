@@ -98,6 +98,15 @@ class CoraPyGDataset(InMemoryDataset):
         cora_data_list.prompt_edge_feat = texts_embed[5]
         cora_data_list.edge_label_feat = texts_embed[6]
 
+        # Initially 'cora.pt' has 10 different masks. We use only the first one.
+        cora_data_list.train_mask = cora_data_list.train_masks[0]
+        cora_data_list.val_mask = cora_data_list.val_masks[0]
+        cora_data_list.test_mask = cora_data_list.test_masks[0]
+
+        cora_data_list.train_masks = None
+        cora_data_list.val_masks = None
+        cora_data_list.test_masks = None
+
         # Pass the data_list as a list
         data, slices = self.collate([cora_data_list])
 

@@ -8,12 +8,12 @@ from transformers import LlamaTokenizer, LlamaModel
 class SentenceEncoder:
     def __init__(self, name, root="lang_models", batch_size=512, device=0, multi_gpu=False):
         self.name = name
+        # TODO : check if self.root = root works?
         self.root = osp.abspath(root)
         self.batch_size = batch_size
         self.multi_gpu = multi_gpu
 
-        # if device = 123 then use cpu otherwise use cuda
-        self.device = device #"cpu" if device==123 else f"cuda:{device}"
+        self.device = device
 
         if self.name == "ST":
             self.model = SentenceTransformer(

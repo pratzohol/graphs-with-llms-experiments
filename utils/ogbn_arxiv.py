@@ -157,14 +157,10 @@ class ArxivPyGDataset(InMemoryDataset):
         # get dataset split
         split_idx = arxiv_data.get_idx_split()
         train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
-        # Generate 10 different permutations of train/valid/test split
-        train_idx_list = [train_idx[torch.randperm(train_idx.shape[0])] for _ in range(10)]
-        valid_idx_list = [valid_idx[torch.randperm(valid_idx.shape[0])] for _ in range(10)]
-        test_idx_list = [test_idx[torch.randperm(test_idx.shape[0])] for _ in range(10)]
 
-        arxiv_data_list.train_masks = train_idx_list
-        arxiv_data_list.val_masks = valid_idx_list
-        arxiv_data_list.test_masks = test_idx_list
+        arxiv_data_list.train_mask = train_idx
+        arxiv_data_list.val_mask = valid_idx
+        arxiv_data_list.test_mask = test_idx
 
         data, slices = self.collate([arxiv_data_list]) # Pass the data_list as a list
 
