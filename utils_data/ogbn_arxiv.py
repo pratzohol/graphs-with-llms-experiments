@@ -9,6 +9,7 @@ from torch_geometric.data import InMemoryDataset, download_url
 import random
 
 from utils.encoder import SentenceEncoder
+from utils_data.custom_pyg import CustomPygDataset
 
 
 def get_taxonomy(data_root):
@@ -91,7 +92,7 @@ def get_label_feature(data_root):
     return label_node_prompt_list
 
 
-class ArxivPyGDataset(InMemoryDataset):
+class ArxivPyGDataset(InMemoryDataset, CustomPygDataset):
     def __init__(self, dataRoot="../data", custom_dataRoot="../custom_data", sentence_encoder=None, transform=None, pre_transform=None, pre_filter=None):
         self.data_root = dataRoot
         self.custom_data_root = custom_dataRoot

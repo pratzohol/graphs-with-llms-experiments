@@ -4,37 +4,25 @@ import os.path as osp
 import sys
 import random
 from torch.utils.data import Sampler
-
+from torch.utils.data import DataLoader
 
 sys.path.append(osp.join(osp.dirname(__file__), ".."))
 
-from utils.cora import CoraPyGDataset
-from utils.pubmed import PubmedPyGDataset
-from utils.ogbn_arxiv import ArxivPyGDataset
-from utils.ogbn_products import ProductsPyGDataset
+from utils_data.cora import CoraPyGDataset
+from utils_data.pubmed import PubmedPyGDataset
+from utils_data.ogbn_arxiv import ArxivPyGDataset
+from utils_data.ogbn_products import ProductsPyGDataset
 from utils.encoder import SentenceEncoder
-from utils.task_constructor import *
+from utils.task_constructor import TaskConstructor
+from utils.sampler import BatchSampler
 
 
-class BatchSampler(Sampler):
-    def __init__(self, batch_count, batch_size, task, seed=None):
-        self.batch_count = batch_count
-        self.batch_size = batch_size
-        self.task = task
-        self.rng = random.Random(seed)
+class Collator:
+    def __init__(self, params):
+        pass
 
-    def __iter__(self):
-        for _ in range(self.batch_count):
-            yield self.sample()
-
-    def __len__(self):
-        return self.batch_count
-
-    def sample(self):
-        batch = []
-        for _ in range(self.batch_size):
-            batch.append(self.task.sample())
-        return batch
+    def __call__(self):
+        pass
 
 
 class GetDataloader:
@@ -60,8 +48,36 @@ class GetDataloader:
         else:
             raise NotImplementedError
 
+        smplr_params = {
+            "batch_count": kwargs["batch_count"],
+            "batch_size": kwargs["batch_size"],
+            "seed": kwargs["seed"],
+            # TODO: Add below params to arg.py and config.yaml
+            "n_way": kwargs["n_way"],
+            "n_shot": kwargs["n_shot"],
+            "n_query": kwargs["n_query"],
+            "n_member" : kwargs["n_shot"] + kwargs["n_query"],
+        }
+
+        self.trn_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="train_mask"))
+        self.val_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="val_mask"))
+        self.test_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="test_mask"))
+
+        wrkrs = kwargs["num_workers"]
+        self.train_dataloader = DataLoader(self.custom_data, batch_sampler=self.trn_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
+        self.val_dataloader = DataLoader(self.custom_data, batch_sampler=self.val_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
+        self.test_dataloader = DataLoader(self.custom_data, batch_sampler=self.test_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
+
+
+    def get_dataloader(self):
+        return self.train_dataloader, self.val_dataloader, self.test_dataloader
+
+    def get_num_classes(self):
+        return self.custom_data.num_classes
+
     def get_data(self):
         return self.custom_data._data
 
 
 if __name__ == '__main__':
+    pass

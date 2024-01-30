@@ -17,7 +17,8 @@ def get_params():
     # Training-specific params
     args.add_argument("--lr", default=0.001, type=float)
     args.add_argument("--epochs", default=200, type=int)
-    args.add_argument("--batch_size", default=5, type=int)
+    args.add_argument("--batch_count", default=501, type=int) # number of batches
+    args.add_argument("--batch_size", default=5, type=int) # size of each batch
     args.add_argument("--weight_decay", default=0.001, type=float)
     args.add_argument("--dropout", default=0.3, type=float)
     args.add_argument("--seed", default=None, type=int)

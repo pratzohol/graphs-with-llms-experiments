@@ -8,9 +8,10 @@ import numpy as np
 from torch_geometric.data import InMemoryDataset, download_url
 
 from utils.encoder import SentenceEncoder
+from utils_data.custom_pyg import CustomPygDataset
 
 
-class PubmedPyGDataset(InMemoryDataset):
+class PubmedPyGDataset(InMemoryDataset, CustomPygDataset):
     def __init__(self, dataRoot="data", custom_dataRoot="custom_data", sentence_encoder=None, transform=None, pre_transform=None, pre_filter=None):
         self.data_root = dataRoot
         self.custom_data_root = custom_dataRoot

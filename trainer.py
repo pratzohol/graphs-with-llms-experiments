@@ -34,8 +34,9 @@ class Trainer:
             os.makedirs(self.state_dict_path)
 
         dataloader = GetDataloader(**self.params)
-        self.data = dataloader.get_data()
-        self.num_classes = len(self.data.y.squeeze().unique())
+        self.train_dataloader, self.val_dataloader, self.test_dataloader = dataloader.get_dataloader()
+        self.num_classes = dataloader.get_num_classes()
+        # self.data = dataloader.get_data()
 
         if self.model_type == "mlp":
             self.model = MLP(num_classes=self.num_classes, dropout=params["dropout"])
@@ -44,7 +45,7 @@ class Trainer:
         else:
             raise NotImplementedError
 
-        self.data = self.data.to(device=self.device)
+        # self.data = self.data.to(device=self.device)
         self.model = self.model.to(device=self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
 
