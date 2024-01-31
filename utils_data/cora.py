@@ -89,6 +89,8 @@ class CoraPyGDataset(InMemoryDataset, CustomPygDataset):
 
         torch.save(texts, self.processed_paths[1])
 
+        cora_data_list.num_nodes = cora_data_list.y.shape[0]
+
         cora_data_list.x_text_feat = texts_embed[0]
         cora_data_list.label_text_feat = texts_embed[1]
         cora_data_list.edge_text_feat = texts_embed[2]

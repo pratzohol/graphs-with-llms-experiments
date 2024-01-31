@@ -10,7 +10,7 @@ class TaskConstructor:
         self.num_classes = self.custom_data.num_classes
         self.unique_labels_set = range(self.num_classes)  # list of unique labels
 
-        all_labels = self.graph_data.y.squeeze().numpy()  # returns numpy array on cpu
+        all_labels = self.graph_data.y.numpy()  # returns numpy array on cpu
         train_split_idx = self.graph_data["train_mask"]
 
         all_labels = -1 - all_labels  # flip labels
@@ -20,7 +20,7 @@ class TaskConstructor:
         self.train_label2idx = {label: np.where(self.train_activated_labels == label)[0] for label in self.unique_labels_set} # for that particular label, get the indices of train
 
         if split != "train_mask":
-            all_labels = self.graph_data.y.squeeze().numpy()
+            all_labels = self.graph_data.y.numpy()
             split_idx = self.graph_data[split]
 
             all_labels = -1 - all_labels  # flip labels

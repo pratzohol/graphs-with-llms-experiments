@@ -24,3 +24,4 @@ eval_only: False
 n_way: 3
 n_shot: 3
 n_query: 2
+num_neighbors: [-1] # number of neighbors to sample for each layer; -1 means all neighbors

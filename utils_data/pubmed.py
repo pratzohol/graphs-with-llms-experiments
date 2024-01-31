@@ -91,6 +91,8 @@ class PubmedPyGDataset(InMemoryDataset, CustomPygDataset):
 
         torch.save(texts, self.processed_paths[1])
 
+        pubmed_data_list.num_nodes = pubmed_data_list.y.shape[0]
+
         pubmed_data_list.x_text_feat = texts_embed[0]
         pubmed_data_list.label_text_feat = texts_embed[1]
         pubmed_data_list.edge_text_feat = texts_embed[2]
