@@ -16,7 +16,8 @@ class SentenceEncoder:
 
         if self.name == "ST":
             self.model = SentenceTransformer(
-                "sentence-transformers/multi-qa-distilbert-cos-v1",
+                osp.abspath("../lang_models/sentence-transformers_multi-qa-distilbert-cos-v1"),
+                #"sentence-transformers/multi-qa-distilbert-cos-v1",
                 device=self.device,
                 cache_folder=root
             )

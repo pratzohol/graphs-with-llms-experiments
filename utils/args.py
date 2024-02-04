@@ -27,8 +27,10 @@ def get_params():
     args.add_argument("--n_way", default=3, type=int) # number of classes in a task
     args.add_argument("--n_shot", default=3, type=int) # number of samples per class in a task_constructor
     args.add_argument("--n_query", default=2, type=int) # number of queries per class in a task
-    args.add_argument("--num_neighbours", default=[-1], type=int, nargs="+") # number of neighbors to sample for each layer; -1 means all neighbors
 
+    # Subgraph args
+    args.add_argument("--num_neighbours", default=[-1], type=int, nargs="+") # number of neighbors to sample for each layer; -1 means all neighbors
+    args.add_argument("--subgraph_type", default="induced", type=str) # type of subgraph to be sampled (induced, directional or bidirectional)
 
     args.add_argument("--num_workers", default=10, type=int) # Number of workers per dataloader
     args.add_argument("--device", default=123, type=int) # device 123 means CPU

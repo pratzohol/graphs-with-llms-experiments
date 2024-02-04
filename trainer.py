@@ -28,6 +28,8 @@ class Trainer:
         self.model_type = params["model_type"].lower()
         self.device = params["device"]
         self.epochs = params["epochs"]
+        self.batch_ocunt = params["batch_count"]
+
 
         self.state_dict_path = osp.join(params["state_dict_path"], f"{self.dataset_name}_{self.sentence_encoder}", f"{self.model_type}")
         if not osp.exists(self.state_dict_path):
@@ -60,23 +62,15 @@ class Trainer:
 
 
     def train(self):
-        t_load = 0
-        t_step = 0
+        total_time = 0
         best_val_acc = 0
 
-        tbar = trange(1, self.epochs)
+        trn_dtldr_itr = iter(self.train_dataloader)
 
         self.model.eval()
         with torch.inference_mode():
-            out = self.model(self.data)
-            pred = out.argmax(dim=1)
+            # TODO: Change the logic for test and how testing is done
 
-            ypred = pred[self.data.test_mask]
-            ytrue = self.data.y[self.data.test_mask]
-            test_correct = (ypred == ytrue).sum()
-
-            test_acc = int(test_correct) / ytrue.shape[0]
-            test_loss = float(F.cross_entropy(out[self.data.test_mask], ytrue))
 
             wandb.log({"test_acc": test_acc, "test_loss": test_loss})
 
@@ -85,65 +79,72 @@ class Trainer:
             print("Note: also skipping evaluation of val set")
             return test_acc, test_loss
 
-        # total of 10 training masks are present for each dataset
-        for e in tbar:
-            #####################################################
-            t1 = time.time()
+        for e in range(self.epochs):
+            tbar = trange(1, self.batch_count)
+            for step in tbar:
+                #####################################################
+                t1 = time.time()
+                #####################################################
+
+                try:
+                    batch = next(trn_dtldr_itr)
+                except StopIteration:
+                    trn_dtldr_itr = iter(self.train_dataloader)
+                    batch = next(trn_dtldr_itr)
+
+                #####################################################
+                t2 = time.time()
+                #####################################################
+
+                # TODO: Change self.data as we now use batch, transfer batch to self.device and change the training logic
+                self.model.train()
+                self.optimizer.zero_grad()
+
+                batch = [i.to(self.device) for i in batch] # move to gpu device
+
+                out = self.model(*batch)
+                # train_pred = out.argmax(dim=1)
+
+                # train_ypred = train_pred[batch.train_mask]
+                # train_ytrue = batch.y[batch.train_mask]
+
+                # train_correct = (train_ypred == train_ytrue).sum()
+
+                # train_acc = int(train_correct) / train_ytrue.shape[0]
+                # train_loss = F.cross_entropy(out[batch.train_mask], train_ytrue)
+
+                train_loss.backward()
+                self.optimizer.step()
+
+                #####################################################
+                t3 = time.time()
+                #####################################################
+
+                wandb.log({"batch_training_time": t3 - t2}, step=e)
+                wandb.log({"batch_loading_time": t2 - t1}, step=e) # avg time to load and process a single batch.
+                wandb.log({"train_acc": train_acc, "train_loss": train_loss}, step=e)
+
+                total_time += t3 - t1
+                tbar.set_description(f"Epoch: {e} | Step: {step} / {self.batch_count}")
+
+                # TODO: Change the logic for validation and when to run and how to store best val
+                if step % 1000 == 0:
 
 
-            #####################################################
-            t2 = time.time()
-            self.model.train()
-            self.optimizer.zero_grad()
+                    wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
-            out = self.model(self.data)
-            train_pred = out.argmax(dim=1)
+                    if val_acc > best_val_acc:
+                        best_val_acc = val_acc
 
-            train_ypred = train_pred[self.data.train_mask]
-            train_ytrue = self.data.y[self.data.train_mask]
+                        save_path = osp.join(self.state_dict_path, f"best_state_dict.pt")
+                        if osp.exists(save_path):
+                            os.remove(save_path)
 
-            train_correct = (train_ypred == train_ytrue).sum()
+                        model_info = {"state_dict" : self.model.state_dict(),
+                                        "optimizer_state_dict" : self.optimizer.state_dict(),
+                                        "val_accuracy" : best_val_acc,
+                                        "val_loss" : val_loss}
 
-            train_acc = int(train_correct) / train_ytrue.shape[0]
-            train_loss = F.cross_entropy(out[self.data.train_mask], train_ytrue)
-
-            train_loss.backward()
-            self.optimizer.step()
-            t3 = time.time()
-            #####################################################
-
-            wandb.log({"step_time": t3 - t2}, step=e)
-            wandb.log({"load_time": t2 - t1}, step=e)
-            wandb.log({"train_acc": train_acc, "train_loss": train_loss}, step=e)
-
-            t_load += t2 - t1
-            t_step += t3 - t2
-
-            tbar.set_description(f"load: {t_load / e}, step: {t_step / e}") # avg time to load and process a single batch respectively.
-
-
-            if e % 1000 == 0:
-                val_ypred = train_pred[self.data.val_mask]
-                val_ytrue = self.data.y[self.data.val_mask]
-                val_correct = (val_ypred == val_ytrue).sum()
-
-                val_acc = int(val_correct) / val_ytrue.shape[0]
-                val_loss = F.cross_entropy(out[self.data.val_mask], val_ytrue)
-
-                wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
-
-                if val_acc > best_val_acc:
-                    best_val_acc = val_acc
-
-                    save_path = osp.join(self.state_dict_path, f"best_state_dict.pt")
-                    if osp.exists(save_path):
-                        os.remove(save_path)
-
-                    model_info = {"state_dict" : self.model.state_dict(),
-                                    "optimizer_state_dict" : self.optimizer.state_dict(),
-                                    "val_accuracy" : best_val_acc,
-                                    "val_loss" : val_loss}
-
-                    torch.save(model_info, save_path)
+                        torch.save(model_info, save_path)
 
         return test_acc, test_loss

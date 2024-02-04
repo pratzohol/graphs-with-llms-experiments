@@ -1,7 +1,7 @@
 from ogb.nodeproppred import PygNodePropPredDataset
 import os
 import os.path as osp
-import torch_geometric
+from torch_geometric.data import Data
 import torch
 import pandas as pd
 import numpy as np
@@ -50,6 +50,7 @@ class CoraPyGDataset(InMemoryDataset, CustomPygDataset):
         # Load the raw cora dataset
         data_path = osp.join(self.data_root, "cora", "cora.pt")
         raw_cora_data = torch.load(data_path)
+        raw_cora_data = Data.from_dict(raw_cora_data.to_dict()) # cora.pt is based on old pyg version, for pyg>=2.4.0, need to do this
 
         texts = raw_cora_data.raw_text
         label_names = raw_cora_data.label_names
@@ -88,6 +89,10 @@ class CoraPyGDataset(InMemoryDataset, CustomPygDataset):
         texts_embed = self.encode_texts(texts)
 
         torch.save(texts, self.processed_paths[1])
+
+        # These can't be converted to tensors, so it interferes with other pyg functions
+        cora_data_list.raw_text = None
+        cora_data_list.category_names = None
 
         cora_data_list.num_nodes = cora_data_list.y.shape[0]
 

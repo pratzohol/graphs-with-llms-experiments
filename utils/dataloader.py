@@ -5,6 +5,8 @@ import sys
 import random
 from torch.utils.data import Sampler
 from torch.utils.data import DataLoader
+from torch_geometric.data import Batch
+from itertools import chain
 
 sys.path.append(osp.join(osp.dirname(__file__), ".."))
 
@@ -12,17 +14,10 @@ from utils_data.cora import CoraPyGDataset
 from utils_data.pubmed import PubmedPyGDataset
 from utils_data.ogbn_arxiv import ArxivPyGDataset
 from utils_data.ogbn_products import ProductsPyGDataset
+from utils_data.custom_pyg import SubgraphPygDataset
 from utils.encoder import SentenceEncoder
 from utils.task_constructor import TaskConstructor
 from utils.sampler import BatchSampler
-
-
-class Collator:
-    def __init__(self, params):
-        pass
-
-    def __call__(self):
-        pass
 
 
 class GetDataloader:
@@ -62,10 +57,12 @@ class GetDataloader:
         self.val_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="val_mask"))
         self.test_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="test_mask"))
 
+        self.subgraph_custom_data = SubgraphPygDataset(graph=self.custom_data._data, num_neighbors=kwargs["num_neighbors"], subgraph_type=kwargs["subgraph_type"])
+
         wrkrs = kwargs["num_workers"]
-        self.train_dataloader = DataLoader(self.custom_data, batch_sampler=self.trn_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
-        self.val_dataloader = DataLoader(self.custom_data, batch_sampler=self.val_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
-        self.test_dataloader = DataLoader(self.custom_data, batch_sampler=self.test_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
+        self.train_dataloader = DataLoader(self.subgraph_custom_data, batch_sampler=self.trn_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
+        self.val_dataloader = DataLoader(self.subgraph_custom_data, batch_sampler=self.val_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
+        self.test_dataloader = DataLoader(self.subgraph_custom_data, batch_sampler=self.test_smplr, num_workers=wrkrs, collate_fn=Collator(params=smplr_params))
 
 
     def get_dataloader(self):
@@ -78,5 +75,60 @@ class GetDataloader:
         return self.custom_data._data
 
 
-if __name__ == '__main__':
-    pass
+class Collator:
+    def __init__(self, params):
+        self.n_shot = params["n_shot"]
+        self.n_query = params["n_query"]
+
+    def process_one_task(self, task):
+        label_map = list(task)
+        label_map_reverse = {v: i for i, v in enumerate(label_map)}
+
+        all_graphs = []
+        labels = []
+        query_mask = []
+
+        for label, graphs in task.items():
+            all_graphs.extend(graphs)
+            query_mask.extend([False] * self.n_shot)
+            query_mask.extend([True] * self.n_query)
+            labels.extend([label_map_reverse[label]] * len(graphs)) # label_map_reverse[label] is the index of label in label_map
+
+        return all_graphs, torch.tensor(labels), torch.tensor(query_mask), label_map
+
+    def __call__(self, batch):
+        graphs, labels, query_mask, label_map = map(list, zip(*[self.process_one_task(task) for task in batch]))
+
+        num_task = len(graphs)
+        task_len = len(graphs[0])
+        num_labels = len(label_map[0])
+
+        graphs_ = Batch.from_data_list([g for l in graphs for g in l])
+        labels_ = torch.cat(labels)
+        query_mask_ = torch.cat(query_mask)
+        label_map_ = list(chain(*label_map))
+
+        metagraph_edge_source = torch.arange(labels_.size(0)).repeat_interleave(num_labels)
+
+        metagraph_edge_target = torch.arange(num_labels).repeat(labels_.size(0))
+        metagraph_edge_target += (torch.arange(num_task) * num_labels).repeat_interleave(task_len * num_labels) + labels_.size(0)
+
+        metagraph_edge_index = torch.stack([metagraph_edge_source, metagraph_edge_target], dim=0)
+
+        metagraph_edge_mask = query_mask_.repeat_interleave(num_labels)
+
+        metagraph_edge_attr = torch.nn.functional.one_hot(labels_, num_labels).float()
+        metagraph_edge_attr = metagraph_edge_attr.reshape(-1)
+        metagraph_edge_attr = (metagraph_edge_attr * 2 - 1) * (~metagraph_edge_mask)
+
+        metagraph_edge_attr = torch.stack([metagraph_edge_mask, metagraph_edge_attr], dim=1)
+
+        all_label_embeddings = graphs[0][0].label_text_feat
+
+        label_map_ = torch.tensor(label_map_)
+        label_embeddings = all_label_embeddings[label_map_]
+
+        labels_onehot = torch.nn.functional.one_hot(labels_).float()
+
+        return graphs_, label_embeddings, labels_onehot, metagraph_edge_index, metagraph_edge_attr, metagraph_edge_mask
+

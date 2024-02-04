@@ -1,7 +1,7 @@
 from ogb.nodeproppred import PygNodePropPredDataset
 import os
 import os.path as osp
-import torch_geometric
+from torch_geometric.data import Data
 import torch
 import pandas as pd
 import numpy as np
@@ -52,6 +52,7 @@ class PubmedPyGDataset(InMemoryDataset, CustomPygDataset):
         # Load the raw pubmed dataset
         data_path = osp.join(self.data_root, "pubmed", "pubmed.pt")
         raw_pubmed_data = torch.load(data_path)
+        raw_pubmed_data = Data.from_dict(raw_pubmed_data.to_dict()) # cora.pt is based on old pyg version, for pyg>=2.4.0, need to do this
 
         texts = raw_pubmed_data.raw_text
         label_names = raw_pubmed_data.label_names
@@ -90,6 +91,10 @@ class PubmedPyGDataset(InMemoryDataset, CustomPygDataset):
         texts_embed = self.encode_texts(texts)
 
         torch.save(texts, self.processed_paths[1])
+
+        # These can't be converted to tensors, so it interferes with other pyg functions
+        pubmed_data_list.raw_text = None
+        pubmed_data_list.category_names = None
 
         pubmed_data_list.num_nodes = pubmed_data_list.y.shape[0]
 
