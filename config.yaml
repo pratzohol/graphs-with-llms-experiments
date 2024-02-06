@@ -30,15 +30,16 @@ model_params:
 
 
 lr: 0.001
-epochs: 200
+epochs: 1
 batch_count: 501
-batch_size: 100
+batch_size: 16
+val_check_interval: 100
 weight_decay: 0.001
 seed: null
 device: 0
 
 n_way: 5
-n_shot: 1
+n_shot: 2
 n_query: 1
 
 num_neighbors: [-1] # number of neighbors to sample for each layer; -1 means all neighbors

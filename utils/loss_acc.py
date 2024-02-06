@@ -34,4 +34,4 @@ class GetLossAcc:
         pred = ypred.argmax(dim=1)
         true = ytrue.argmax(dim=1)
 
-        return (pred == true).sum() / len(true)
+        return (pred == true).sum() # gives total number of correct predictions

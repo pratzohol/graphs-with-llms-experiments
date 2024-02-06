@@ -41,6 +41,7 @@ class Trainer:
         dataloader = GetDataloader(**self.params)
         self.train_dataloader, self.val_dataloader, self.test_dataloader = dataloader.get_dataloader()
         self.num_classes = dataloader.get_num_classes()
+        self.data = dataloader.get_data().to('cpu')
 
         self.model = SuperModel(self.model_option, self.model_params)
         self.model = self.model.to(device=self.device)
@@ -90,7 +91,7 @@ class Trainer:
                 out = self.model(**batch)
 
                 train_loss = self.loss_fn(out)
-                train_acc = self.metric_fn(out)
+                train_acc = self.metric_fn(out) / self.params["batch_size"]
 
                 train_loss.backward()
                 self.optimizer.step()
@@ -106,10 +107,10 @@ class Trainer:
                 total_time += t3 - t1
                 tbar.set_description(f"Epoch: {e} | Step: {step} / {self.batch_count}")
 
-                if step % 1000 == 0:
+                if step % self.params["val_check_interval"] == 0:
                     self.model.eval()
                     with torch.inference_mode():
-                        val_acc, val_loss = self.evaluate(self.val_dataloader)
+                        val_acc, val_loss = self.evaluate(self.val_dataloader, "val")
 
                     wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
@@ -127,12 +128,33 @@ class Trainer:
 
                         torch.save(model_info, save_path)
 
+        print('Training has finished')
+        print("Best val accuracy is", best_val_acc)
+        wandb.run.summary["best_validation_acc"] = best_val_acc
+
         self.model.eval()
         with torch.inference_mode():
-            test_acc, test_loss = self.evaluate(self.test_dataloader)
+            test_acc, test_loss = self.evaluate(self.test_dataloader, "test")
 
-        wandb.log({"test_acc": test_acc, "test_loss": test_loss})
+        print("Final Test accuracy is", test_acc)
+        wandb.run.summary["final_test_acc"] = test_acc
+        wandb.finish()
+
+        print("--------Finish------------")
         return test_acc, test_loss
 
-    def evaluate(self, dataloader):
-        pass
+    def evaluate(self, dataloader, mode="test"):
+        loss = 0.0
+        correct = 0
+        for batch in dataloader:
+            for key in batch:
+                batch[key] = batch[key].to(device=self.device)
+
+            out = self.model(**batch)
+
+            loss += self.loss_fn(out)
+            correct += self.metric_fn(out)
+
+        mask = self.data.val_mask if mode == "val" else self.data.test_mask
+        mask = torch.nonzero(mask).squeeze() if mask.dtype == torch.bool else mask
+        return correct / len(mask), loss

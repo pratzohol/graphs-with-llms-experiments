@@ -37,9 +37,4 @@ if __name__ == '__main__':
         random.seed(SEED)
 
     trnr = Trainer(params)
-
     trnr.train(0)
-
-    # using CLI to get params
-    # params2 = get_params()
-    # trnr = Trainer(params2)

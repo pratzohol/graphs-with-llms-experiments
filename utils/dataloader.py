@@ -18,7 +18,7 @@ from utils_data.ogbn_products import ProductsPyGDataset
 from utils_data.custom_pyg import SubgraphPygDataset
 from utils.encoder import SentenceEncoder
 from utils.task_constructor import TaskConstructor
-from utils.sampler import BatchSampler
+from utils.sampler import TrainBatchSampler, EvalBatchSampler
 
 
 class GetDataloader:
@@ -45,6 +45,8 @@ class GetDataloader:
         else:
             raise NotImplementedError
 
+        self.graph = self.get_data().to('cpu')
+
         smplr_params = {
             "batch_count": kwargs["batch_count"],
             "batch_size": kwargs["batch_size"],
@@ -53,13 +55,14 @@ class GetDataloader:
             "n_shot": kwargs["n_shot"],
             "n_query": kwargs["n_query"],
             "n_member" : kwargs["n_shot"] + kwargs["n_query"],
+            "leave_last": False,
         }
 
-        self.trn_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="train_mask"))
-        self.val_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="val_mask"))
-        self.test_smplr = BatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="test_mask"))
+        self.trn_smplr = TrainBatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="train_mask"))
+        self.val_smplr = EvalBatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="val_mask"))
+        self.test_smplr = EvalBatchSampler(params=smplr_params, task=TaskConstructor(self.custom_data, split="test_mask"))
 
-        self.subgraph_custom_data = SubgraphPygDataset(graph=self.get_data().to('cpu'), num_neighbors=kwargs["num_neighbors"], subgraph_type=kwargs["subgraph_type"])
+        self.subgraph_custom_data = SubgraphPygDataset(graph=self.graph, num_neighbors=kwargs["num_neighbors"], subgraph_type=kwargs["subgraph_type"])
 
         model_option = kwargs["model_option"]
         if model_option == 1:
@@ -167,7 +170,6 @@ class Collator2:
     def __init__(self, params):
         self.n_member = params["n_member"]
 
-
     def process_one_graph(self, graph):
         node_attrs = [key for key, value in graph if graph.is_node_attr(key)]
         for key in node_attrs:
@@ -206,7 +208,7 @@ class Collator2:
             labels.extend([label] * len(graphs))
 
         query_mask = [False] * len(all_graphs)
-        query_mask[random.randint(0, len(all_graphs) - 1)] = True # Randomly select one query
+        query_mask[-1] = True # query
 
         correct_label_mask = (label_map == torch.tensor(labels)[query_mask])
 
