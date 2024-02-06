@@ -3,27 +3,43 @@ exp_name: evaluation-mode
 dataRoot: ./data
 custom_dataRoot: ./custom_data
 dataset: arxiv
-model_type: MLP
 
 sentence_encoder: ST
 encoder_path: ./lang_models
-
 state_dict_path: ./state_dicts
+
+model_option: 2 # or, 1
+model_params:
+  # model1
+  -
+    name: SAGE
+    in_dim: 768
+  # model2
+  -
+    name: RGCN # or, RGAT
+    num_layers: 2
+    in_dim: 768
+    out_dim: 256
+    edge_attr_dim: 768
+    num_relations: 6 # original graph edge, q2c, c2q, s2c, c2s, prompt2graph and graph2prompt
+    heads: 1
+    dropout: 0.3
+    aggr: mean
+    JK: null # [last, sum, None]
+    batch_norm: True
+
 
 lr: 0.001
 epochs: 200
-batch_count: 1001
-batch_size: 2
+batch_count: 501
+batch_size: 100
 weight_decay: 0.001
-dropout: 0.3
 seed: null
-num_workers: 10
 device: 0
-eval_only: False
 
-n_way: 3
+n_way: 5
 n_shot: 1
 n_query: 1
 
 num_neighbors: [-1] # number of neighbors to sample for each layer; -1 means all neighbors
-subgraph_type: directional # can be either 'induced','directional','bidirectional'
+subgraph_type: induced # can be either 'induced','directional','bidirectional'

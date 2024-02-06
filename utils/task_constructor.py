@@ -4,7 +4,7 @@ from utils_data.custom_pyg import CustomPygDataset
 class TaskConstructor:
     def __init__(self, custom_data : CustomPygDataset, split="train_mask"):
         self.custom_data = custom_data
-        self.graph_data = custom_data._data
+        self.graph_data = custom_data._data.to('cpu')
         self.split = split
 
         self.num_classes = self.custom_data.num_classes

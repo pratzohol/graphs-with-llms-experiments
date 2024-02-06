@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from models.gnn import GNN
 from models.mlp import MLP
+from utils.loss_acc import *
 from utils.dataloader import GetDataloader
 from tqdm import trange, trange
 import torch.nn as nn
@@ -11,6 +12,7 @@ import os
 import os.path as osp
 import wandb
 import time
+from models.model import SuperModel
 
 
 class Trainer:
@@ -25,38 +27,33 @@ class Trainer:
 
         self.dataset_name = params["dataset"]
         self.sentence_encoder = params["sentence_encoder"]
-        self.model_type = params["model_type"].lower()
+        self.model_option = params["model_option"]
+        self.model_params = params["model_params"][self.model_option - 1]
         self.device = params["device"]
         self.epochs = params["epochs"]
-        self.batch_ocunt = params["batch_count"]
+        self.batch_count = params["batch_count"]
 
 
-        self.state_dict_path = osp.join(params["state_dict_path"], f"{self.dataset_name}_{self.sentence_encoder}", f"{self.model_type}")
+        self.state_dict_path = osp.join(params["state_dict_path"], f"{self.dataset_name}_{self.sentence_encoder}", f"model_{self.model_option}")
         if not osp.exists(self.state_dict_path):
             os.makedirs(self.state_dict_path)
 
         dataloader = GetDataloader(**self.params)
         self.train_dataloader, self.val_dataloader, self.test_dataloader = dataloader.get_dataloader()
         self.num_classes = dataloader.get_num_classes()
-        # self.data = dataloader.get_data()
 
-        if self.model_type == "mlp":
-            self.model = MLP(num_classes=self.num_classes, dropout=params["dropout"])
-        elif self.model_type in ["gcn", "gat", "sage", "graphsage"]:
-            self.model = GNN(name=self.model_type, num_classes=self.num_classes, dropout=params["dropout"])
-        else:
-            raise NotImplementedError
-
-        # self.data = self.data.to(device=self.device)
+        self.model = SuperModel(self.model_option, self.model_params)
         self.model = self.model.to(device=self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
+
+        self.loss_fn, self.metric_fn = GetLossAcc(self.model_option, self.params).get_functions()
 
         # total number of model parameters
         model_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         num_params = int(sum([np.prod(p.size()) for p in model_parameters]))
         print("Number of trainable parameters of the model:", num_params)
-        wandb.run.summary["num_params"] = num_params
 
+        wandb.run.summary["num_params"] = num_params
         wandb.config.params = params
         wandb.watch(self.model, log_freq=100)
 
@@ -66,18 +63,6 @@ class Trainer:
         best_val_acc = 0
 
         trn_dtldr_itr = iter(self.train_dataloader)
-
-        self.model.eval()
-        with torch.inference_mode():
-            # TODO: Change the logic for test and how testing is done
-
-
-            wandb.log({"test_acc": test_acc, "test_loss": test_loss})
-
-        if self.params["eval_only"]:
-            print("Evaluation only - skipping training - exiting now")
-            print("Note: also skipping evaluation of val set")
-            return test_acc, test_loss
 
         for e in range(self.epochs):
             tbar = trange(1, self.batch_count)
@@ -96,22 +81,16 @@ class Trainer:
                 t2 = time.time()
                 #####################################################
 
-                # TODO: Change self.data as we now use batch, transfer batch to self.device and change the training logic
                 self.model.train()
                 self.optimizer.zero_grad()
 
-                batch = [i.to(self.device) for i in batch] # move to gpu device
+                for key in batch:
+                    batch[key] = batch[key].to(device=self.device) # move to gpu device
 
-                out = self.model(*batch)
-                # train_pred = out.argmax(dim=1)
+                out = self.model(**batch)
 
-                # train_ypred = train_pred[batch.train_mask]
-                # train_ytrue = batch.y[batch.train_mask]
-
-                # train_correct = (train_ypred == train_ytrue).sum()
-
-                # train_acc = int(train_correct) / train_ytrue.shape[0]
-                # train_loss = F.cross_entropy(out[batch.train_mask], train_ytrue)
+                train_loss = self.loss_fn(out)
+                train_acc = self.metric_fn(out)
 
                 train_loss.backward()
                 self.optimizer.step()
@@ -127,9 +106,10 @@ class Trainer:
                 total_time += t3 - t1
                 tbar.set_description(f"Epoch: {e} | Step: {step} / {self.batch_count}")
 
-                # TODO: Change the logic for validation and when to run and how to store best val
                 if step % 1000 == 0:
-
+                    self.model.eval()
+                    with torch.inference_mode():
+                        val_acc, val_loss = self.evaluate(self.val_dataloader)
 
                     wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
@@ -147,4 +127,12 @@ class Trainer:
 
                         torch.save(model_info, save_path)
 
+        self.model.eval()
+        with torch.inference_mode():
+            test_acc, test_loss = self.evaluate(self.test_dataloader)
+
+        wandb.log({"test_acc": test_acc, "test_loss": test_loss})
         return test_acc, test_loss
+
+    def evaluate(self, dataloader):
+        pass

@@ -32,7 +32,6 @@ def get_params():
     args.add_argument("--num_neighbours", default=[-1], type=int, nargs="+") # number of neighbors to sample for each layer; -1 means all neighbors
     args.add_argument("--subgraph_type", default="induced", type=str) # type of subgraph to be sampled (induced, directional or bidirectional)
 
-    args.add_argument("--num_workers", default=10, type=int) # Number of workers per dataloader
     args.add_argument("--device", default=123, type=int) # device 123 means CPU
 
     args.add_argument("--eval_only", default=False, type=bool) # If True, only evaluates the model
