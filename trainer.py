@@ -11,13 +11,14 @@ import torch.nn.functional as F
 import os
 import os.path as osp
 import wandb
+from tqdm import tqdm
 import time
 from models.model import SuperModel
 
 
 class Trainer:
     def __init__(self, params):
-        wandb.init(project="graphs-with-llms-experiments", name=params["exp name"])
+        wandb.init(project="graphs-with-llms-experiments", name=params["exp_name"])
         wandb.run.summary["wandb_url"] = wandb.run.url
 
         self.params = params
@@ -32,7 +33,7 @@ class Trainer:
         self.device = params["device"]
         self.epochs = params["epochs"]
         self.batch_count = params["batch_count"]
-
+        self.eval_only = params["eval_only"]
 
         self.state_dict_path = osp.join(params["state_dict_path"], f"{self.dataset_name}_{self.sentence_encoder}", f"model_{self.model_option}")
         if not osp.exists(self.state_dict_path):
@@ -56,7 +57,7 @@ class Trainer:
 
         wandb.run.summary["num_params"] = num_params
         wandb.config.params = params
-        wandb.watch(self.model, log_freq=100)
+        wandb.watch(self.model, log_freq=10)
 
 
     def train(self):
@@ -65,68 +66,81 @@ class Trainer:
 
         trn_dtldr_itr = iter(self.train_dataloader)
 
-        for e in range(self.epochs):
-            tbar = trange(1, self.batch_count)
-            for step in tbar:
-                #####################################################
-                t1 = time.time()
-                #####################################################
+        if self.eval_only:
+            self.model.eval()
+            with torch.inference_mode():
+                test_acc, test_loss = self.evaluate(self.test_dataloader, "test")
 
-                try:
-                    batch = next(trn_dtldr_itr)
-                except StopIteration:
-                    trn_dtldr_itr = iter(self.train_dataloader)
-                    batch = next(trn_dtldr_itr)
+            print("Final Test accuracy is", test_acc)
+            print("Evaluation Mode ONLY. Exiting ...")
+            print("Finished")
 
-                #####################################################
-                t2 = time.time()
-                #####################################################
+            wandb.run.summary["final_test_acc"] = test_acc
+            wandb.run.summary["final_test_loss"] = test_loss
+            wandb.finish()
+            return test_acc, test_loss
 
-                self.model.train()
-                self.optimizer.zero_grad()
+        tbar = trange(self.epochs * self.batch_count)
+        for e in tbar:
+            #####################################################
+            t1 = time.time()
+            #####################################################
 
-                for key in batch:
-                    batch[key] = batch[key].to(device=self.device) # move to gpu device
+            try:
+                batch = next(trn_dtldr_itr)
+            except StopIteration:
+                trn_dtldr_itr = iter(self.train_dataloader)
+                batch = next(trn_dtldr_itr)
 
-                out = self.model(**batch)
+            #####################################################
+            t2 = time.time()
+            #####################################################
 
-                train_loss = self.loss_fn(out)
-                train_acc = self.metric_fn(out) / self.params["batch_size"]
+            self.model.train()
+            self.optimizer.zero_grad()
 
-                train_loss.backward()
-                self.optimizer.step()
+            for key in batch:
+                batch[key] = batch[key].to(device=self.device) # move to gpu device
 
-                #####################################################
-                t3 = time.time()
-                #####################################################
+            out = self.model(**batch)
 
-                wandb.log({"batch_training_time": t3 - t2}, step=e)
-                wandb.log({"batch_loading_time": t2 - t1}, step=e) # avg time to load and process a single batch.
-                wandb.log({"train_acc": train_acc, "train_loss": train_loss}, step=e)
+            train_loss = self.loss_fn(*out)
+            train_acc = self.metric_fn(*out) / self.params["batch_size"]
 
-                total_time += t3 - t1
-                tbar.set_description(f"Epoch: {e} | Step: {step} / {self.batch_count}")
+            train_loss.backward()
+            self.optimizer.step()
 
-                if step % self.params["val_check_interval"] == 0:
-                    self.model.eval()
-                    with torch.inference_mode():
-                        val_acc, val_loss = self.evaluate(self.val_dataloader, "val")
+            #####################################################
+            t3 = time.time()
+            #####################################################
 
-                    wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
+            wandb.log({"batch_training_time": t3 - t2}, step=e)
+            wandb.log({"batch_loading_time": t2 - t1}, step=e) # avg time to load and process a single batch.
+            wandb.log({"train_acc": train_acc, "train_loss": train_loss}, step=e)
 
-                    if val_acc > best_val_acc:
-                        best_val_acc = val_acc
+            total_time += t3 - t1
+            tbar.set_description(f"Epoch: {e // self.batch_count}")
 
-                        save_path = osp.join(self.state_dict_path, f"best_state_dict.pt")
-                        if osp.exists(save_path):
-                            os.remove(save_path)
+            if e % self.params["val_check_interval"] == 0:
+                self.model.eval()
+                with torch.inference_mode():
+                    val_acc, val_loss = self.evaluate(self.val_dataloader, "val")
 
-                        model_info = {"state_dict" : self.model.state_dict(),
-                                        "optimizer_state_dict" : self.optimizer.state_dict(),
-                                        "val_accuracy" : best_val_acc,
-                                        "val_loss" : val_loss}
+                wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
-                        torch.save(model_info, save_path)
+                if val_acc > best_val_acc:
+                    best_val_acc = val_acc
+
+                    save_path = osp.join(self.state_dict_path, f"best_state_dict.pt")
+                    if osp.exists(save_path):
+                        os.remove(save_path)
+
+                    model_info = {"state_dict" : self.model.state_dict(),
+                                    "optimizer_state_dict" : self.optimizer.state_dict(),
+                                    "val_accuracy" : best_val_acc,
+                                    "val_loss" : val_loss}
+
+                    torch.save(model_info, save_path)
 
         print('Training has finished')
         print("Best val accuracy is", best_val_acc)
@@ -137,24 +151,25 @@ class Trainer:
             test_acc, test_loss = self.evaluate(self.test_dataloader, "test")
 
         print("Final Test accuracy is", test_acc)
-        wandb.run.summary["final_test_acc"] = test_acc
-        wandb.finish()
-
         print("--------Finish------------")
+
+        wandb.run.summary["final_test_acc"] = test_acc
+        wandb.run.summary["final_test_loss"] = test_loss
+        wandb.finish()
         return test_acc, test_loss
 
     def evaluate(self, dataloader, mode="test"):
         loss = 0.0
         correct = 0
-        for batch in dataloader:
+        for batch in tqdm(dataloader, desc=f"Evaluation Mode-{mode}"):
             for key in batch:
                 batch[key] = batch[key].to(device=self.device)
 
             out = self.model(**batch)
 
-            loss += self.loss_fn(out)
-            correct += self.metric_fn(out)
+            loss += self.loss_fn(*out)
+            correct += self.metric_fn(*out)
 
         mask = self.data.val_mask if mode == "val" else self.data.test_mask
         mask = torch.nonzero(mask).squeeze() if mask.dtype == torch.bool else mask
-        return correct / len(mask), loss
+        return (correct / len(mask)).item(), loss.item()

@@ -18,7 +18,7 @@ class GetLossAcc:
         pass
 
     def loss_2(self, class_emb, correct_label_mask):
-        loss = nn.BCEWithLogitsLoss(reduction="sum")
+        loss = nn.BCEWithLogitsLoss(reduction="mean")
         return loss(class_emb.squeeze(), correct_label_mask.type(torch.float))
 
     def accuracy_1():

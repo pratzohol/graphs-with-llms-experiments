@@ -93,6 +93,7 @@ class CoraPyGDataset(InMemoryDataset, CustomPygDataset):
         # These can't be converted to tensors, so it interferes with other pyg functions
         cora_data_list.raw_text = None
         cora_data_list.category_names = None
+        cora_data_list.label_names = None
 
         cora_data_list.num_nodes = cora_data_list.y.shape[0]
 

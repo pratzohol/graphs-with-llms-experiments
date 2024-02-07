@@ -168,7 +168,9 @@ class Collator:
 
 class Collator2:
     def __init__(self, params):
-        self.n_member = params["n_member"]
+        self.params = params
+        self.n_way = params["n_way"]
+        self.n_shot = params["n_shot"]
 
     def process_one_graph(self, graph):
         node_attrs = [key for key, value in graph if graph.is_node_attr(key)]
@@ -235,7 +237,7 @@ class Collator2:
 
         # Edge Types -> 3: edges from sample to class, 4: edges from query to label, 5: edges from label to query
         smple2cls_edge_source = supernode_indices[~query_mask_]
-        smpl2cls_edge_target = label_indices.repeat_interleave(self.n_member)[~query_mask_]
+        smpl2cls_edge_target = label_indices.repeat_interleave(self.n_shot)[~query_mask_]
 
         edge_idx = torch.stack([smple2cls_edge_source, smpl2cls_edge_target])
         edge_type = torch.tensor([3] * (edge_idx.shape[1]), dtype=torch.long)

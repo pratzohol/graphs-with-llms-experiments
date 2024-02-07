@@ -95,6 +95,7 @@ class PubmedPyGDataset(InMemoryDataset, CustomPygDataset):
         # These can't be converted to tensors, so it interferes with other pyg functions
         pubmed_data_list.raw_text = None
         pubmed_data_list.category_names = None
+        pubmed_data_list.label_names = None
 
         pubmed_data_list.num_nodes = pubmed_data_list.y.shape[0]
 

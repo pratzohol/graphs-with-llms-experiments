@@ -43,10 +43,10 @@ class TaskConstructor:
             sampled_labels = rng.sample(self.unique_labels_set, params["n_way"])
             for label in sampled_labels:
                 members = self.train_label2idx[label] # numpy array
-                sample_fn = rng.choices if members.shape[0] < params["n_member"] else rng.sample # choices = replacement, sample = no replacement and unique
-                task[label] = members[sample_fn(range(members.shape[0]), k=params["n_member"])].tolist() # convert to list
+                sample_fn = rng.choices if members.shape[0] < params["n_shot"] else rng.sample # choices = replacement, sample = no replacement and unique
+                task[label] = members[sample_fn(range(members.shape[0]), k=params["n_shot"])].tolist() # convert to list
         else:
-            eval_node = self.mask[eval_idx]
+            eval_node = self.mask.tolist()[eval_idx]
             eval_idx_label = self.graph_data.y.numpy()[eval_node]
 
             modified_all_labels = [l for l in self.unique_labels_set if l != eval_idx_label]

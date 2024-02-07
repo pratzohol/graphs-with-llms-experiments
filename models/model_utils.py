@@ -34,7 +34,7 @@ class SingleHeadAttention(nn.Module):
         attention = F.softmax(score, dim=-1)
         context = torch.matmul(attention, v) # N x 1 x l2
 
-        return context.squeeze()
+        return context.squeeze() # N x l2
 
 class EdgeTypeMultiLayerMessagePassing(nn.Module):
     def __init__(
@@ -80,7 +80,9 @@ class EdgeTypeMultiLayerMessagePassing(nn.Module):
                 torch.nn.Linear(2*self.out_dim, self.out_dim)
             )
             self.mlp_list.append(mlp)
+
             self.batch_norm_list.append(nn.BatchNorm1d(self.out_dim))
+
             if layer == 0:
                 self.module_list.append(self.build_input_layer())
             else:
@@ -98,7 +100,7 @@ class EdgeTypeMultiLayerMessagePassing(nn.Module):
         )
 
     def build_hidden_layer(self):
-        GeneralGNN(
+        return GeneralGNN(
             name=self.name,
             in_dim=self.out_dim,
             out_dim=self.out_dim,
@@ -132,7 +134,7 @@ class EdgeTypeMultiLayerMessagePassing(nn.Module):
             for layer in range(self.num_layers):
                 repr += h_list[layer]
         else:
-            repr = h_list
+            repr = torch.stack(h_list, dim=1)
         return repr
 
 
