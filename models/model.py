@@ -17,9 +17,9 @@ class SuperModel(nn.Module):
             self.model2_gnn = EdgeTypeMultiLayerMessagePassing(**self.model_params)
             self.attn_model = SingleHeadAttention(in_dim=self.model_params["in_dim"], out_dim=self.model_params["out_dim"])
             self.link_pred_mlp = nn.Sequential(
-                nn.Linear(self.model_params["out_dim"], 2*self.model_params["out_dim"]),
+                nn.Linear(self.model_params["out_dim"], self.model_params["out_dim"]),
                 nn.ReLU(),
-                nn.Linear(2*self.model_params["out_dim"], self.model_params["out_dim"]),
+                nn.Linear(self.model_params["out_dim"], self.model_params["out_dim"]),
                 nn.ReLU(),
                 nn.Linear(self.model_params["out_dim"], 1)
             )
@@ -52,7 +52,8 @@ class SuperModel(nn.Module):
         e_type = graphs.edge_type
 
         h = self.model2_gnn.forward(x=x, edge_index=e_idx, edge_attr=e_attr, edge_type=e_type)
-        h = self.attn_model.forward(k=h, q=x, v=h)
+        if not self.model_params["JK"] in ["last", "sum"]:
+            h = self.attn_model.forward(k=h, q=x, v=h)
 
         class_embeddings = h[label_indices]
         return self.link_pred_mlp.forward(class_embeddings), correct_label_mask

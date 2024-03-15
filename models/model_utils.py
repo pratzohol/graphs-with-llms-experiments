@@ -81,7 +81,8 @@ class EdgeTypeMultiLayerMessagePassing(nn.Module):
             )
             self.mlp_list.append(mlp)
 
-            self.batch_norm_list.append(nn.BatchNorm1d(self.out_dim))
+            if self.batch_norm:
+                self.batch_norm_list.append(nn.BatchNorm1d(self.out_dim))
 
             if layer == 0:
                 self.module_list.append(self.build_input_layer())

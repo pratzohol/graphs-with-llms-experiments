@@ -1,4 +1,5 @@
-exp_name: ofa-rgcn-training
+exp_name: run14-ofa-rgcn
+exp_notes: changed lr from 1e-4 to 1e-3. changed batch_count from 200 to 100.
 
 dataRoot: ./data
 custom_dataRoot: ./custom_data
@@ -29,20 +30,20 @@ model_params:
     batch_norm: True
 
 
-lr: 0.001
+lr: 1.e-3 # decimal is necessary to read it as float and not as string
 epochs: 1
-batch_count: 1
-batch_size: 16
-val_check_interval: 100
+batch_count: 100
+batch_size: 64
+val_check_interval: 10
 weight_decay: 0.001
 seed: null
-device: 2
+device: 2 # gpu device-id
 
 n_way: 5
-n_shot: 1
+n_shot: 3
 n_query: 1
 
-eval_only: True
+eval_only: False
 
 num_neighbors: [-1] # number of neighbors to sample for each layer; -1 means all neighbors
-subgraph_type: induced # can be either 'induced','directional','bidirectional'
+subgraph_type: directional # can be either 'induced','directional','bidirectional'

@@ -25,7 +25,7 @@ if __name__ == '__main__':
         params = yaml.safe_load(f)
 
     params["device"] = 'cpu' if params["device"] == 123 else f"cuda:{params['device']}"
-    params["exp_name"] = f"{date.today()}. Experiment_{params['dataset']}_{params['sentence_encoder']}_{params['exp_name']}"
+    params["exp_name"] = f"{params['exp_name']}_{params['dataset']}_{params['sentence_encoder']}_{date.today()}"
 
     # control random seed
     if params['seed'] is not None:

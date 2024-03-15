@@ -115,7 +115,7 @@ class Collator:
         query_mask = []
 
         for label, graphs in task.items():
-            all_graphs.extend(self.process_one_graph(g) for g in graphs)
+            all_graphs.extend([self.process_one_graph(g) for g in graphs])
             query_mask.extend([False] * self.n_shot)
             query_mask.extend([True] * self.n_query)
             labels.extend([label_map_reverse[label]] * len(graphs)) # label_map_reverse[label] is the index of label in label_map
@@ -181,40 +181,61 @@ class Collator2:
 
         supernode_idx = graph.num_nodes
         graph.supernode = torch.tensor([supernode_idx])
-
         graph.x_text_feat[graph.supernode] = graph.prompt_text_feat[0]
 
         num_edges = graph.edge_index.shape[1]
-        # Edge types -> 0 : original edges, 1 : edges to supernode, 2 : edges from supernode
-        edge_type = torch.zeros(num_edges, dtype=torch.long)
-        graph.edge_type = torch.cat([edge_type, torch.tensor([1, 2], dtype=torch.long)])
 
-        edge_attr = torch.stack([graph.edge_text_feat[0]] * num_edges)
+        # Edge types -> 0 : original edges, 1 : edges to supernode, 2 : edges from supernode
         prompt_edge = graph.prompt_edge_feat
-        graph.edge_attr = torch.cat([edge_attr, prompt_edge, prompt_edge])
+        if num_edges > 0:
+            edge_attr = torch.stack([graph.edge_text_feat[0]] * num_edges)
+            graph.edge_attr = torch.cat([edge_attr, prompt_edge, prompt_edge])
+
+            edge_type = torch.zeros(num_edges, dtype=torch.long)
+            graph.edge_type = torch.cat([edge_type, torch.tensor([1, 2], dtype=torch.long)])
+        else:
+            graph.edge_attr = torch.cat([prompt_edge, prompt_edge])
+            graph.edge_type = torch.tensor([1, 2], dtype=torch.long)
 
         edge_index = torch.tensor([[0, supernode_idx], [supernode_idx, 0]], dtype=torch.long)
         graph.edge_index = torch.cat([graph.edge_index, edge_index], dim=1)
+
+        if graph.edge_attr.shape[0] != graph.edge_index.shape[1]:
+            print(graph.edge_attr.shape, graph.edge_index.shape, graph.edge_type.shape)
+            print(num_edges)
+
+        assert graph.edge_index.shape[1] == graph.edge_attr.shape[0]
+        assert graph.edge_index.shape[1] == graph.edge_type.shape[0]
 
         graph.num_nodes += 1
         return graph
 
     def process_one_task(self, task):
         label_map = torch.tensor(list(task))
+        query_label = label_map[-1]
+
+        correct_label_mask = torch.tensor([False] * len(label_map))
+        correct_label_mask[-1] = True
+
+        indices_shuffled = torch.randperm(len(label_map))
+        label_map = label_map[indices_shuffled]
+        correct_label_mask = correct_label_mask[indices_shuffled]
 
         all_graphs = []
         labels = []
+        query_mask = []
 
-        for label, graphs in task.items():
-            all_graphs.extend(self.process_one_graph(g) for g in graphs)
+        for label in label_map.tolist():
+            graphs = task[label]
+
+            all_graphs.extend([self.process_one_graph(g) for g in graphs])
             labels.extend([label] * len(graphs))
 
-        query_mask = [False] * len(all_graphs)
-        query_mask[-1] = True # query
+            query_mask.extend([False] * len(graphs))
+            if label == query_label:
+                query_mask[-1] = True
 
-        correct_label_mask = (label_map == torch.tensor(labels)[query_mask])
-
-        return all_graphs, torch.tensor(labels), torch.tensor(query_mask), label_map, torch.tensor(correct_label_mask)
+        return all_graphs, torch.tensor(labels), torch.tensor(query_mask), label_map, correct_label_mask
 
     def __call__(self, batch):
         graph_list, labels, query_mask, label_map, correct_label_mask = map(list, zip(*[self.process_one_task(task) for task in batch]))
@@ -237,7 +258,7 @@ class Collator2:
 
         # Edge Types -> 3: edges from sample to class, 4: edges from query to label, 5: edges from label to query
         smple2cls_edge_source = supernode_indices[~query_mask_]
-        smpl2cls_edge_target = label_indices.repeat_interleave(self.n_shot)[~query_mask_]
+        smpl2cls_edge_target = label_indices.repeat_interleave(self.n_shot)
 
         edge_idx = torch.stack([smple2cls_edge_source, smpl2cls_edge_target])
         edge_type = torch.tensor([3] * (edge_idx.shape[1]), dtype=torch.long)
@@ -253,6 +274,8 @@ class Collator2:
 
         edge_idx = torch.cat([edge_idx, qry2lbl_edge, lbl2qry_edge], dim=1)
         edge_type = torch.cat([edge_type, qry2lbl_edge_type, lbl2qry_edge_type])
+
+        assert edge_idx.shape[1] == edge_type.shape[0]
 
         prompt_edge_feat = graph_list[0][0].prompt_edge_feat[0]
         edge_attr = torch.stack([prompt_edge_feat] * edge_idx.shape[1])

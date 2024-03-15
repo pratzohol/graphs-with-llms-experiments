@@ -39,18 +39,26 @@ class TaskConstructor:
         rng = params["rng"]
         task = {}
 
+        # since python dictionaries are ordered from python 3.7, we add the query label at last
         if self.split == "train_mask":
             sampled_labels = rng.sample(self.unique_labels_set, params["n_way"])
+            query_label = rng.sample(sampled_labels, 1)[0]
             for label in sampled_labels:
-                members = self.train_label2idx[label] # numpy array
-                sample_fn = rng.choices if members.shape[0] < params["n_shot"] else rng.sample # choices = replacement, sample = no replacement and unique
-                task[label] = members[sample_fn(range(members.shape[0]), k=params["n_shot"])].tolist() # convert to list
+                if label != query_label:
+                    members = self.train_label2idx[label] # numpy array
+                    sample_fn = rng.choices if members.shape[0] < params["n_shot"] else rng.sample # choices = replacement, sample = no replacement and unique
+                    task[label] = members[sample_fn(range(members.shape[0]), k=params["n_shot"])].tolist() # convert to list
+
+            members = self.train_label2idx[query_label] # numpy array
+            sample_fn = rng.choices if members.shape[0] < params["n_shot"] + 1 else rng.sample # choices = replacement, sample = no replacement and unique
+            task[query_label] = members[sample_fn(range(members.shape[0]), k=params["n_shot"] + 1)].tolist()
         else:
             eval_node = self.mask.tolist()[eval_idx]
             eval_idx_label = self.graph_data.y.numpy()[eval_node]
 
             modified_all_labels = [l for l in self.unique_labels_set if l != eval_idx_label]
             sampled_labels = rng.sample(modified_all_labels, params["n_way"] - 1)
+
             for label in sampled_labels:
                 train_members = self.train_label2idx[label]
                 trn_sample_fn = rng.choices if train_members.shape[0] < params["n_shot"] else rng.sample
@@ -58,7 +66,7 @@ class TaskConstructor:
 
             members = self.train_label2idx[eval_idx_label]
             sample_fn = rng.choices if members.shape[0] < params["n_shot"] else rng.sample
-            task[eval_idx_label] = members[sample_fn(range(members.shape[0]), k=params["n_shot"] - 1)].tolist()
+            task[eval_idx_label] = members[sample_fn(range(members.shape[0]), k=params["n_shot"])].tolist()
             task[eval_idx_label].append(eval_node)
 
         return task

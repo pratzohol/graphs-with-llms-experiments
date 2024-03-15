@@ -13,12 +13,18 @@ import os.path as osp
 import wandb
 from tqdm import tqdm
 import time
+from datetime import timedelta
 from models.model import SuperModel
 
 
+def convert_time(seconds):
+    min, sec = divmod(seconds, 60)
+    hour, min = divmod(min, 60)
+    return '%02d:%02d:%02d' % (hour, min, sec)
+
 class Trainer:
     def __init__(self, params):
-        wandb.init(project="graphs-with-llms-experiments", name=params["exp_name"])
+        wandb.init(project="graphs-with-llms-experiments", notes=params["exp_notes"], name=params["exp_name"])
         wandb.run.summary["wandb_url"] = wandb.run.url
 
         self.params = params
@@ -105,7 +111,8 @@ class Trainer:
             out = self.model(**batch)
 
             train_loss = self.loss_fn(*out)
-            train_acc = self.metric_fn(*out) / self.params["batch_size"]
+            correct, total = self.metric_fn(*out)
+            train_acc = correct / total
 
             train_loss.backward()
             self.optimizer.step()
@@ -121,10 +128,14 @@ class Trainer:
             total_time += t3 - t1
             tbar.set_description(f"Epoch: {e // self.batch_count}")
 
-            if e % self.params["val_check_interval"] == 0:
+            if (e + 1) % self.params["val_check_interval"] == 0:
+                t = time.time()
                 self.model.eval()
                 with torch.inference_mode():
                     val_acc, val_loss = self.evaluate(self.val_dataloader, "val")
+                t_ = time.time()
+
+                total_time += t_ - t
 
                 wandb.log({"val_acc": val_acc, "val_loss": val_loss}, step=e)
 
@@ -144,23 +155,31 @@ class Trainer:
 
         print('Training has finished')
         print("Best val accuracy is", best_val_acc)
-        wandb.run.summary["best_validation_acc"] = best_val_acc
+        wandb.run.summary["best_val_acc"] = best_val_acc
 
+        t = time.time()
         self.model.eval()
         with torch.inference_mode():
             test_acc, test_loss = self.evaluate(self.test_dataloader, "test")
+        t_ = time.time()
 
+        total_time += t_ - t
+
+        print("Total time taken for training and evaluation is", convert_time(total_time)) # format time in hh:mm:ss
         print("Final Test accuracy is", test_acc)
         print("--------Finish------------")
 
         wandb.run.summary["final_test_acc"] = test_acc
         wandb.run.summary["final_test_loss"] = test_loss
+
+        wandb.run.summary["total_time"] = convert_time(total_time)
         wandb.finish()
         return test_acc, test_loss
 
     def evaluate(self, dataloader, mode="test"):
         loss = 0.0
-        correct = 0
+        correct_all = 0
+        total_all = 0
         for batch in tqdm(dataloader, desc=f"Evaluation Mode-{mode}"):
             for key in batch:
                 batch[key] = batch[key].to(device=self.device)
@@ -168,8 +187,11 @@ class Trainer:
             out = self.model(**batch)
 
             loss += self.loss_fn(*out)
-            correct += self.metric_fn(*out)
+            correct, total = self.metric_fn(*out)
 
-        mask = self.data.val_mask if mode == "val" else self.data.test_mask
-        mask = torch.nonzero(mask).squeeze() if mask.dtype == torch.bool else mask
-        return (correct / len(mask)).item(), loss.item()
+            correct_all += correct
+            total_all += total
+
+        # mask = self.data.val_mask if mode == "val" else self.data.test_mask
+        # mask = torch.nonzero(mask).squeeze() if mask.dtype == torch.bool else mask
+        return (correct_all / total_all).item(), loss.item()

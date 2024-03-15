@@ -4,7 +4,8 @@ import torch.nn as nn
 class GetLossAcc:
     def __init__(self, model_option, params):
         self.model_option = model_option
-        self.params = params
+
+        self.n_way = params["n_way"]
 
     def get_functions(self):
         if self.model_option == 1:
@@ -18,8 +19,8 @@ class GetLossAcc:
         pass
 
     def loss_2(self, class_emb, correct_label_mask):
-        loss = nn.BCEWithLogitsLoss(reduction="mean")
-        return loss(class_emb.squeeze(), correct_label_mask.type(torch.float))
+        loss = nn.BCEWithLogitsLoss(reduction="sum")
+        return loss(class_emb.squeeze(), correct_label_mask.type(torch.float)) / self.n_way
 
     def accuracy_1():
         pass
@@ -28,10 +29,15 @@ class GetLossAcc:
         sigmoid = nn.Sigmoid()
         prob = sigmoid(class_emb)
 
-        ypred = prob.reshape(-1, self.params["n_way"])
-        ytrue = correct_label_mask.reshape(-1, self.params["n_way"]).type(torch.int)
+        ypred = prob.reshape(-1, self.n_way)
+        ytrue = correct_label_mask.type(torch.float).reshape(-1, self.n_way)
+
+        # print("ypred:", ypred)
+        # print("ytrue:", ytrue)
 
         pred = ypred.argmax(dim=1)
         true = ytrue.argmax(dim=1)
 
-        return (pred == true).sum() # gives total number of correct predictions
+        total_count = true.shape[0]
+
+        return (pred == true).sum(), total_count # gives total number of correct predictions and total number of predictions
